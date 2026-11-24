@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { siteConfig } from "@/lib/content";
+import { siteUrl } from "@/lib/content";
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -7,9 +7,9 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/admin", "/account", "/checkout", "/api/", "/cart"],
+        disallow: ["/admin", "/account", "/checkout", "/api/", "/cart", "/login", "/register"],
       },
     ],
-    sitemap: `${siteConfig.site.url}/sitemap.xml`,
+    sitemap: `${siteUrl}/sitemap.xml`,
   };
 }

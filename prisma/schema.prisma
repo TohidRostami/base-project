@@ -31,6 +31,9 @@ model User {
   phoneNumberVerified Boolean  @default(false)
   image               String?
   role                Role     @default(CUSTOMER)
+  // Optional profile details shown on the account page.
+  birthDate           DateTime?
+  usualSize           String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -39,6 +42,10 @@ model User {
   addresses Address[]
   orders    Order[]
   reviews   Review[]
+  wishlist  WishlistItem[]
+  // Codes an admin made for this customer only, and the codes they have already used.
+  discountCodes       DiscountCode[]       @relation("DiscountTarget")
+  discountRedemptions DiscountRedemption[]
 
   @@index([role])
   @@map("user")
@@ -100,6 +107,18 @@ model Verification {
   @@map("verification")
 }
 
+// Better Auth's database-backed rate limiter. On Vercel (serverless) the
+// default in-memory limiter is per-instance and therefore ineffective —
+// and every OTP request costs an SMS — so limits live in the database.
+model RateLimit {
+  id          String @id @default(cuid())
+  key         String @unique
+  count       Int
+  lastRequest BigInt
+
+  @@map("rate_limit")
+}
+
 // =====================================================================
 // CATALOG
 // =====================================================================
@@ -124,6 +143,9 @@ model Product {
   slug            String   @unique
   name            String
   description     String
+  // Fabric & care notes ("جنس و نگهداری") — optional, shown as its own
+  // accordion section on the product page.
+  materialCare    String?
   price           Int
   compareAtPrice  Int?
   sku             String?  @unique
@@ -146,6 +168,8 @@ model Product {
   colors     Color[]
   reviews    Review[]
   orderItems OrderItem[]
+  discountCodes DiscountCodeProduct[]
+  wishlistedBy WishlistItem[]
 
   @@index([categoryId])
   @@index([isPublished, isFeatured])
@@ -254,6 +278,47 @@ model Review {
   @@map("review")
 }
 
+model WishlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@map("wishlist_item")
+}
+
+// =====================================================================
+// AUDIENCE — newsletter sign-ups and contact-form messages
+// =====================================================================
+
+// `contact` is either an email address or a mobile number, normalized
+// (see lib/audience.ts) — the storefront form accepts both.
+model NewsletterSubscriber {
+  id        String   @id @default(cuid())
+  contact   String   @unique
+  createdAt DateTime @default(now())
+
+  @@map("newsletter_subscriber")
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String
+  subject   String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([isRead, createdAt])
+  @@map("contact_message")
+}
+
 // =====================================================================
 // ORDERS & CHECKOUT
 // =====================================================================
@@ -263,6 +328,9 @@ model Address {
   userId      String
   fullName    String
   phone       String
+  // Home phone with area code. Optional in the database so addresses saved
+  // before this field existed stay valid; the checkout form requires it.
+  landline    String?
   province    String
   city        String
   addressLine String
@@ -303,9 +371,16 @@ model Order {
   subtotal       Int
   discountAmount Int         @default(0)
   shippingCost   Int         @default(0)
+  // POST | TIPAX — both are پس‌کرایه (the customer pays the carrier on delivery),
+  // so shippingCost stays 0. Null for in-person sales and orders from before this existed.
+  shippingMethod String?
   total          Int
   discountCodeId String?
+  // Gateway "authority"/token issued when the payment starts — how the
+  // callback finds the order again. `paymentRefId` is the bank's final
+  // reference number, stored only after a successful verification.
   gatewayRef     String?
+  paymentRefId   String?
   paidAt         DateTime?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
@@ -313,11 +388,13 @@ model Order {
   user         User?         @relation(fields: [userId], references: [id], onDelete: Restrict)
   address      Address?      @relation(fields: [addressId], references: [id], onDelete: Restrict)
   discountCode DiscountCode? @relation(fields: [discountCodeId], references: [id], onDelete: SetNull)
+  redemption   DiscountRedemption?
   items        OrderItem[]
 
   @@index([userId])
   @@index([status, createdAt])
   @@index([source])
+  @@index([gatewayRef])
   @@map("order")
 }
 
@@ -349,22 +426,70 @@ enum DiscountType {
   FIXED
 }
 
+enum DiscountScope {
+  ALL
+  PRODUCTS
+}
+
 model DiscountCode {
-  id            String       @id @default(cuid())
-  code          String       @unique
+  id            String        @id @default(cuid())
+  code          String        @unique
   type          DiscountType
   value         Int
+  // Global cap across every customer, reserved when an order is created and
+  // given back if that order is cancelled. Separate from the once-per-user rule.
   maxUses       Int?
-  usedCount     Int          @default(0)
+  usedCount     Int           @default(0)
   minOrderTotal Int?
+  scope         DiscountScope @default(ALL)
+  // null = any signed-in customer may use it; otherwise only this user.
+  targetUserId  String?
+  // Validity window. Both null = valid any time, forever.
+  startsAt      DateTime?
   expiresAt     DateTime?
-  isActive      Boolean      @default(true)
-  createdAt     DateTime     @default(now())
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
 
-  orders Order[]
+  targetUser  User?                 @relation("DiscountTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  products    DiscountCodeProduct[]
+  redemptions DiscountRedemption[]
+  orders      Order[]
 
   @@index([isActive])
+  @@index([targetUserId])
   @@map("discount_code")
+}
+
+model DiscountCodeProduct {
+  id             String @id @default(cuid())
+  discountCodeId String
+  productId      String
+
+  discountCode DiscountCode @relation(fields: [discountCodeId], references: [id], onDelete: Cascade)
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([discountCodeId, productId])
+  @@index([productId])
+  @@map("discount_code_product")
+}
+
+// One row = "this customer has used this code" — written only once the
+// order's payment is confirmed, so abandoned or failed checkouts never
+// burn a code. The unique pair is what enforces once-per-user in the database.
+model DiscountRedemption {
+  id             String   @id @default(cuid())
+  discountCodeId String
+  userId         String
+  orderId        String   @unique
+  createdAt      DateTime @default(now())
+
+  discountCode DiscountCode @relation(fields: [discountCodeId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order        Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([discountCodeId, userId])
+  @@index([userId])
+  @@map("discount_redemption")
 }
 
 // =====================================================================

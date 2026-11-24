@@ -14,11 +14,34 @@ import {
 } from "@/components/ui/table";
 import { DeleteEntityButton } from "@/components/admin/delete-entity-button";
 import { requireAdmin } from "@/lib/require-admin";
-import { getAllDiscountCodes } from "@/lib/queries/admin-discounts";
+import {
+  getAllDiscountCodes,
+  type DiscountCodeRow,
+} from "@/lib/queries/admin-discounts";
 import { deleteDiscountCode } from "@/app/admin/discounts/actions";
 import { formatPrice, toPersianDigits } from "@/lib/format";
+import { formatTehranJalali } from "@/lib/iran-time";
 
 export const metadata: Metadata = { title: "کدهای تخفیف | پنل مدیریت" };
+
+const STATUS: Record<
+  DiscountCodeRow["status"],
+  { label: string; variant: "default" | "outline" | "secondary" }
+> = {
+  live: { label: "فعال", variant: "default" },
+  inactive: { label: "غیرفعال", variant: "outline" },
+  scheduled: { label: "هنوز شروع نشده", variant: "secondary" },
+  expired: { label: "منقضی", variant: "outline" },
+};
+
+function periodText(c: DiscountCodeRow): string {
+  if (!c.startsAt && !c.expiresAt) return "همیشه معتبر";
+  if (c.startsAt && c.expiresAt)
+    return `${formatTehranJalali(c.startsAt)} تا ${formatTehranJalali(c.expiresAt)}`;
+  return c.startsAt
+    ? `از ${formatTehranJalali(c.startsAt)}`
+    : `تا ${formatTehranJalali(c.expiresAt!)}`;
+}
 
 export default async function AdminDiscountsPage() {
   // Discounts is ADMIN-only — see the same note in orders/page.tsx.
@@ -53,7 +76,10 @@ export default async function AdminDiscountsPage() {
               <TableRow className="hover:bg-transparent">
                 <TableHead className="text-center">کد</TableHead>
                 <TableHead className="text-center">مقدار</TableHead>
-                <TableHead className="text-center">استفاده‌شده</TableHead>
+                <TableHead className="text-center">محصولات</TableHead>
+                <TableHead className="text-center">کاربران</TableHead>
+                <TableHead className="text-center">بازه‌ی اعتبار</TableHead>
+                <TableHead className="text-center">خرید تکمیل‌شده</TableHead>
                 <TableHead className="text-center">وضعیت</TableHead>
                 <TableHead className="text-center">عملیات</TableHead>
               </TableRow>
@@ -69,13 +95,38 @@ export default async function AdminDiscountsPage() {
                       ? `${toPersianDigits(c.value)}٪`
                       : `${formatPrice(c.value)} تومان`}
                   </TableCell>
-                  <TableCell className="text-center  text-muted-foreground">
-                    {toPersianDigits(c.usedCount)}
-                    {c.maxUses ? ` / ${toPersianDigits(c.maxUses)}` : ""}
+                  <TableCell className="text-center text-muted-foreground">
+                    {c.scope === "ALL"
+                      ? "همه‌ی محصولات"
+                      : `${toPersianDigits(c.productIds.length)} محصول`}
+                  </TableCell>
+                  <TableCell className="text-center text-muted-foreground">
+                    {c.targetUser ? (
+                      <span title={c.targetUser.email}>
+                        {c.targetUser.name}
+                      </span>
+                    ) : (
+                      "همه‌ی کاربران"
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center text-xs text-muted-foreground">
+                    {periodText(c)}
+                  </TableCell>
+                  <TableCell className="text-center text-muted-foreground">
+                    {toPersianDigits(c.redeemedCount)}
+                    {c.maxUses ? (
+                      <span
+                        className="block text-xs"
+                        title="ظرفیت کل: سفارش‌هایی که یک نوبت از ظرفیت را نگه داشته‌اند، شامل سفارش‌های در انتظار پرداخت"
+                      >
+                        ظرفیت {toPersianDigits(c.usedCount)} /{" "}
+                        {toPersianDigits(c.maxUses)}
+                      </span>
+                    ) : null}
                   </TableCell>
                   <TableCell className="text-center">
-                    <Badge variant={c.isActive ? "default" : "outline"}>
-                      {c.isActive ? "فعال" : "غیرفعال"}
+                    <Badge variant={STATUS[c.status].variant}>
+                      {STATUS[c.status].label}
                     </Badge>
                   </TableCell>
                   <TableCell className="pe-6">

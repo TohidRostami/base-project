@@ -13,13 +13,13 @@ export default async function AdminLayout({
   const role = (session.user as unknown as { role?: string }).role ?? "ADMIN";
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="hidden w-64 shrink-0 bg-sidebar lg:sticky lg:top-0 lg:block lg:h-screen">
+    <div className="flex min-h-screen print:block print:min-h-0">
+      <aside className="hidden w-64 shrink-0 bg-sidebar lg:sticky lg:top-0 lg:block lg:h-screen print:hidden">
         <AdminNav role={role} />
       </aside>
       <div className="min-w-0 flex-1">
         <AdminMobileHeader role={role} />
-        <main className="p-4 sm:p-6 lg:p-8">
+        <main className="p-4 sm:p-6 lg:p-8 print:p-0">
           <RouteTransitionProvider>{children}</RouteTransitionProvider>
         </main>
       </div>

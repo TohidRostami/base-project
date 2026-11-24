@@ -13,9 +13,11 @@ import {
   Settings,
   ExternalLink,
   Store,
+  MessageSquare,
+  Mail,
 } from "lucide-react";
 
-import { Logo, WhiteLogo } from "@/components/shared/logo";
+import { WhiteLogo } from "@/components/shared/logo";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -51,45 +53,53 @@ export function AdminNav({
   role?: string;
 }) {
   const pathname = usePathname();
+
   const visibleNav =
     role === "SUBADMIN"
       ? NAV.filter((item) => SUBADMIN_ALLOWED_HREFS.has(item.href))
       : NAV;
 
   return (
-    <div className="flex h-full flex-col text-sidebar-foreground">
-      <div className="flex items-center justify-between px-5 py-5">
+    <div className="flex h-full min-h-0 flex-col text-sidebar-foreground">
+      {/* Header / Logo */}
+      <div className="shrink-0 px-5 py-5">
         <Link href="/admin" className="[&_span]:text-sidebar-foreground">
           <WhiteLogo />
         </Link>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-0.5 px-3">
-        {visibleNav.map((item) => {
-          const isActive = item.exact
-            ? pathname === item.href
-            : pathname.startsWith(item.href);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onNavigate}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors",
-                isActive
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/65 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
-              )}
-            >
-              <Icon className="size-4" strokeWidth={1.6} />
-              {item.label}
-            </Link>
-          );
-        })}
+      {/* Scrollable navigation */}
+      <nav className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+        <div className="flex flex-col gap-0.5">
+          {visibleNav.map((item) => {
+            const isActive = item.exact
+              ? pathname === item.href
+              : pathname.startsWith(item.href);
+
+            const Icon = item.icon;
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onNavigate}
+                className={cn(
+                  "flex shrink-0 items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors",
+                  isActive
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground/65 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+                )}
+              >
+                <Icon className="size-4" strokeWidth={1.6} />
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
       </nav>
 
-      <div className="border-t border-sidebar-border px-3 py-4">
+      {/* Fixed bottom link */}
+      <div className="shrink-0 border-t border-sidebar-border px-3 py-4">
         <Link
           href="/"
           className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm text-sidebar-foreground/65 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"

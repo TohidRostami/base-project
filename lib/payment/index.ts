@@ -1,61 +1,92 @@
-export type PaymentInitResult = { redirectUrl: string };
-export type PaymentVerifyResult = { success: boolean; refId?: string; message?: string };
+import { siteUrl } from "@/lib/content";
+import { zarinpalRequest, zarinpalVerify } from "@/lib/payment/zarinpal";
 
 /**
- * The one seam to touch when the real payment gateway link is ready.
+ * Payment layer. The rest of the app only knows these functions:
  *
- * Until PAYMENT_GATEWAY_MERCHANT_ID is set, checkout redirects to a local
- * simulated gateway (/checkout/payment-simulator/[orderId]) so the full
- * pre-payment flow and the result page can be built and tested end to
- * end today. Swapping in a real Iranian gateway (ZarinPal, Zibal, IDPay,
- * ...) only means filling in the two functions below — nothing in the
- * cart, checkout form, or result page needs to change.
+ *   initiatePayment()      — start a payment for an unpaid order
+ *   verifyGatewayPayment() — server-to-server check after the gateway calls back
+ *
+ * Provider is chosen by env: PAYMENT_GATEWAY_MERCHANT_ID + PAYMENT_PROVIDER
+ * ("zarinpal" is built in). To add another gateway (Zibal, IDPay, ...),
+ * add a file next to zarinpal.ts and a branch in the two functions below.
+ *
+ * With no merchant id, checkout uses a local simulator so the whole flow
+ * can be tested — but never in production unless ALLOW_PAYMENT_SIMULATOR
+ * is "true", because the simulator lets anyone "pay" for free.
  */
+
+export const PAYMENT_CALLBACK_PATH = "/api/payment/callback";
+
+const merchantId = () => process.env.PAYMENT_GATEWAY_MERCHANT_ID || "";
+const provider = () => (process.env.PAYMENT_PROVIDER || "zarinpal").toLowerCase();
+
+export function isSimulatorEnabled(): boolean {
+  if (merchantId()) return false;
+  return (
+    process.env.NODE_ENV !== "production" ||
+    process.env.ALLOW_PAYMENT_SIMULATOR === "true"
+  );
+}
+
+export type InitiatePaymentResult =
+  | { ok: true; redirectUrl: string; gatewayRef: string | null }
+  | { ok: false; error: string };
+
 export async function initiatePayment(order: {
   id: string;
   orderNumber: string;
   total: number;
-}): Promise<PaymentInitResult> {
-  const merchantId = process.env.PAYMENT_GATEWAY_MERCHANT_ID;
-
-  if (!merchantId) {
-    return { redirectUrl: `/checkout/payment-simulator/${order.id}` };
+  mobile?: string | null;
+}): Promise<InitiatePaymentResult> {
+  if (!merchantId()) {
+    if (!isSimulatorEnabled()) {
+      return {
+        ok: false,
+        error: "درگاه پرداخت هنوز راه‌اندازی نشده است. لطفاً با پشتیبانی تماس بگیرید.",
+      };
+    }
+    return { ok: true, redirectUrl: `/checkout/payment-simulator/${order.id}`, gatewayRef: null };
   }
 
-  // Replace with the real gateway's "payment request" call. Example shape
-  // for ZarinPal (https://www.zarinpal.com/docs/paymentGateway/):
-  //
-  //   const res = await fetch("https://api.zarinpal.com/pg/v4/payment/request.json", {
-  //     method: "POST",
-  //     headers: { "Content-Type": "application/json" },
-  //     body: JSON.stringify({
-  //       merchant_id: merchantId,
-  //       amount: order.total * 10, // toman → rial
-  //       callback_url: `${process.env.NEXT_PUBLIC_SITE_URL}/api/payment/callback`,
-  //       description: `سفارش ${order.orderNumber}`,
-  //     }),
-  //   });
-  //   const data = await res.json();
-  //   return { redirectUrl: `https://www.zarinpal.com/pg/StartPay/${data.data.authority}` };
+  if (provider() !== "zarinpal") {
+    return { ok: false, error: `درگاه «${provider()}» پشتیبانی نمی‌شود.` };
+  }
 
-  throw new Error(
-    "PAYMENT_GATEWAY_MERCHANT_ID تنظیم شده ولی اتصال واقعی درگاه هنوز در lib/payment/index.ts پیاده‌سازی نشده."
-  );
+  try {
+    const { authority, redirectUrl } = await zarinpalRequest({
+      merchantId: merchantId(),
+      amountToman: order.total,
+      callbackUrl: `${siteUrl}${PAYMENT_CALLBACK_PATH}`,
+      description: `سفارش ${order.orderNumber}`,
+      mobile: order.mobile,
+    });
+    return { ok: true, redirectUrl, gatewayRef: authority };
+  } catch (e) {
+    console.error("[payment] initiate failed:", e instanceof Error ? e.message : e);
+    return {
+      ok: false,
+      error: "اتصال به درگاه پرداخت برقرار نشد. لطفاً چند دقیقه بعد دوباره تلاش کنید.",
+    };
+  }
 }
 
-/** Called from /api/payment/callback once the real gateway redirects back. */
-export async function verifyPayment(
-  _orderId: string,
-  _callbackParams: Record<string, string>
-): Promise<PaymentVerifyResult> {
-  throw new Error("verifyPayment() هنوز پیاده‌سازی نشده — بعد از وصل کردن درگاه واقعی تکمیلش کنید.");
-}
+export type VerifyResult =
+  | { status: "success"; refId?: string }
+  | { status: "failed"; message?: string }
+  /** Couldn't reach the gateway — the payment may or may not have succeeded. */
+  | { status: "unknown" };
 
-export function generateOrderNumber(): string {
-  const date = new Date();
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  const rand = Math.floor(1000 + Math.random() * 9000);
-  return `HSH-${y}${m}${d}-${rand}`;
+export async function verifyGatewayPayment(input: {
+  authority: string;
+  amountToman: number;
+}): Promise<VerifyResult> {
+  if (provider() !== "zarinpal" || !merchantId()) return { status: "failed" };
+  try {
+    const r = await zarinpalVerify({ merchantId: merchantId(), ...input });
+    return r.success ? { status: "success", refId: r.refId } : { status: "failed", message: r.message };
+  } catch (e) {
+    console.error("[payment] verify failed:", e instanceof Error ? e.message : e);
+    return { status: "unknown" };
+  }
 }

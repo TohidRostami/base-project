@@ -9,8 +9,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-const PER_PAGE_OPTIONS = [10, 25, 50];
+import { ORDERS_PER_PAGE_OPTIONS } from "@/lib/admin-orders-params";
+import { toPersianDigits } from "@/lib/format";
 
 export function OrdersPerPageSelect({ perPage }: { perPage: number }) {
   const { push } = useRouteTransition();
@@ -34,9 +34,9 @@ export function OrdersPerPageSelect({ perPage }: { perPage: number }) {
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {PER_PAGE_OPTIONS.map((n) => (
+        {ORDERS_PER_PAGE_OPTIONS.map((n) => (
           <SelectItem key={n} value={String(n)}>
-            {n} در صفحه
+            {toPersianDigits(n)} در صفحه
           </SelectItem>
         ))}
       </SelectContent>

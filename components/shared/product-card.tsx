@@ -1,134 +1,109 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Plus } from "lucide-react";
-
-import { Badge } from "@/components/ui/badge";
+import { Star } from "lucide-react";
 import { ProductPlaceholder } from "@/components/shared/product-placeholder";
-import type { GarmentVariant } from "@/components/shared/garment-glyph";
+import { WishlistButton } from "@/components/shared/wishlist-button";
+import {
+  discountPercent,
+  formatPrice,
+  formatRating,
+  toPersianDigits,
+} from "@/lib/format";
 import type { ProductDTO } from "@/lib/types";
-import { formatPrice } from "@/lib/format";
-import { cn } from "@/lib/utils";
 
-const KNOWN_VARIANTS: GarmentVariant[] = [
-  "shirts",
-  "tshirts",
-  "pants",
-  "outerwear",
-  "shoes",
-  "accessories",
-];
-
-const MAX_VISIBLE_SWATCHES = 5;
-
-function toGarmentVariant(slug: string): GarmentVariant {
-  return (KNOWN_VARIANTS as string[]).includes(slug)
-    ? (slug as GarmentVariant)
-    : "shirts";
-}
-
-export function ProductCard({ product }: { product: ProductDTO }) {
-  const image = product.images[0];
-  const visibleColors = product.colors
-    ? product.colors.slice(0, MAX_VISIBLE_SWATCHES)
-    : [];
-  const hiddenColorCount = product.colors
-    ? product.colors.length - visibleColors.length
-    : 0;
+export function ProductCard({
+  product,
+  priority = false,
+}: {
+  product: ProductDTO;
+  priority?: boolean;
+}) {
+  const off = discountPercent(product.price, product.compareAtPrice);
+  const firstColor = product.colors[0];
+  const image =
+    product.images.find((i) => i.colorId === firstColor?.id) ??
+    product.images[0];
+  const badge = !product.inStock
+    ? "ناموجود"
+    : off > 0
+      ? `${toPersianDigits(off)}٪ تخفیف`
+      : product.isNew
+        ? "جدید"
+        : null;
+  const badgeClass = off > 0 && product.inStock ? "bg-sale" : "bg-ink";
+  const href = `/products/${product.slug}`;
 
   return (
-    <Link href={`/products/${product.slug}`} className="group block">
-      <div className="relative overflow-hidden rounded-lg">
-        {image ? (
-          <div
-            className={cn(
-              "relative aspect-4/5 w-full",
-              !product.inStock && "opacity-60",
-            )}
-          >
-            <Image
-              src={image.url}
-              alt={image.alt ?? product.name}
-              fill
-              loading="lazy"
-              sizes="(min-width: 1024px) 25vw, 50vw"
-              className="object-cover transition-transform duration-500 group-hover:scale-105"
-            />
-          </div>
-        ) : (
-          <ProductPlaceholder
-            variant={toGarmentVariant(product.category.slug)}
-            className="transition-transform duration-500 group-hover:scale-105"
-          />
-        )}
-        {!product.inStock ? (
-          <Badge
-            variant="outline"
-            className="absolute end-3 top-3 bg-background"
-          >
-            ناموجود
-          </Badge>
-        ) : (
-          product.isNew && <Badge className="absolute end-3 top-3">جدید</Badge>
-        )}
+    <div className="flex min-w-0 flex-col gap-3 border-1 rounded-xl p-2 shadow-lg transition-transform duration-500 hover:scale-[1.03]">
+      <div className="relative aspect-[4/5] overflow-hidden rounded-md bg-sand">
+        <Link
+          href={href}
+          tabIndex={-1}
+          aria-hidden="true"
+          className="absolute inset-0"
+        >
+          {image ? (
+            <div className="relative h-full w-full overflow-hidden">
+              <Image
+                src={image.url}
+                alt={image.alt ?? product.name}
+                fill
+                sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
+                priority={priority}
+                className="object-cover transition-transform duration-500 hover:scale-[1.03]"
+              />
 
-        {product.inStock && (
-          <button
-            type="button"
-            aria-label="افزودن سریع به سبد خرید"
-            className="absolute bottom-3 start-3 inline-flex h-9 translate-y-2 items-center justify-center gap-2 rounded-md bg-background px-3 text-sm text-foreground opacity-0 shadow-sm transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100 cursor-pointer"
+              <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_25px_rgba(0,0,0,0.80)]" />
+            </div>
+          ) : (
+            <ProductPlaceholder
+              categorySlug={product.category.slug}
+              tint={firstColor?.hexValue}
+            />
+          )}
+        </Link>
+        {badge && (
+          <span
+            className={`pointer-events-none absolute left-1 top-1 rounded-full px-2.5 py-1 text-[11px] text-paper ${badgeClass}`}
           >
-            <span>افزودن به سبد خرید</span>
-            <Plus className="size-4 shrink-0" />
-          </button>
+            {badge}
+          </span>
         )}
       </div>
-      <div className="mt-3 flex flex-col items-start justify-between">
-        <div className="min-h-[3.5rem]">
-          <p className="text-xs text-muted-foreground">
-            {product.category.title}
-          </p>
-          <h3 className="mt-0.5 text-sm font-medium">{product.name}</h3>
-        </div>
 
-        {product.colors && (
-          <div className="mt-1.5 flex items-center gap-1.5">
-            {visibleColors?.map((c) => (
+      <Link href={href} className="flex flex-col gap-1.5">
+        <span className="flex flex-col items-start gap-2">
+          <span className="line-clamp-2 text-[13px] text-paragraph">
+            {product.category.title}
+          </span>
+          <span className="line-clamp-2 text-sm font-medium">
+            {product.name}
+          </span>
+          <span
+            className="flex shrink-0 gap-1"
+            aria-label={`${toPersianDigits(product.colors.length)} رنگ`}
+          >
+            {product.colors.slice(0, 4).map((c) => (
               <span
                 key={c.id}
                 title={c.name}
-                className="size-3.5 shrink-0 rounded-full border border-border/60"
-                style={{ backgroundColor: c.hexValue ?? "#d4d4d4" }}
+                className="size-2.5 rounded-full border border-line"
+                style={{ background: c.hexValue ?? "#d4d4d4" }}
               />
             ))}
-            {hiddenColorCount > 0 && (
-              <span className="text-[10px] text-muted-foreground">
-                +{hiddenColorCount}
-              </span>
-            )}
-          </div>
-        )}
-
-        <div className="min-h-[2.5rem] shrink-0 text-start text-sm sm:flex sm:min-h-0 sm:items-center">
-          {product.compareAtPrice && (
-            <>
-              <span className="block text-xs text-muted-foreground line-through">
-                {formatPrice(product.compareAtPrice)}
-              </span>
-              <span className="px-1 hidden sm:flex">-</span>
-            </>
+          </span>
+        </span>
+        <span className="flex flex-wrap items-baseline justify-end gap-1">
+          {product.compareAtPrice && product.compareAtPrice > product.price && (
+            <span className="text-xs text-[#9a8f82] line-through">
+              {formatPrice(product.compareAtPrice)}
+            </span>
           )}
-          <span className="text-foreground">{formatPrice(product.price)}</span>
-          <span className="text-muted-foreground pr-1"> تومان</span>
-        </div>
-        <button
-          type="button"
-          aria-label="افزودن سریع به سبد خرید"
-          className="flex sm:hidden h-9 w-full items-center justify-center gap rounded-md bg-dark-blue px-1 text-xs text-white shadow-sm cursor-pointer"
-        >
-          <span className="text-nowrap">افزودن به سبد خرید</span>
-          <Plus className="size-3 shrink-0" />
-        </button>
-      </div>
-    </Link>
+          <span className="text-sm font-semibold">
+            {formatPrice(product.price)} تومان
+          </span>
+        </span>
+      </Link>
+    </div>
   );
 }

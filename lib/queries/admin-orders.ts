@@ -1,23 +1,9 @@
 import { prisma } from "@/lib/db";
+import { tehranDayEnd, tehranDayStart } from "@/lib/iran-time";
+import type { OrdersParams } from "@/lib/admin-orders-params";
+import type { Prisma } from "@/lib/generated/prisma";
 
 type UserRow = { id: string; name: string; email: string };
-type AddressRow = {
-  id: string;
-  fullName: string;
-  phone: string;
-  province: string;
-  city: string;
-  addressLine: string;
-  postalCode: string;
-};
-type OrderItemRow = {
-  id: string;
-  orderId: string;
-  name: string;
-  price: number;
-  quantity: number;
-  size?: string | null;
-};
 
 export type AdminOrderRow = {
   id: string;
@@ -34,43 +20,33 @@ export type AdminOrderRow = {
   customer: UserRow | null;
 };
 
-export type AdminOrdersFilters = {
-  search?: string;
-  /** ISO date string "YYYY-MM-DD" (Gregorian) — matches what
-   * JalaliDatePicker produces. Matches the whole calendar day. */
-  date?: string;
-  page?: number;
-  perPage?: number;
-};
-
 export type AdminOrdersResult = {
   orders: AdminOrderRow[];
   totalCount: number;
   totalPages: number;
+  /** The page actually shown — a page number past the end is brought back to the last page. */
   page: number;
   perPage: number;
 };
 
-export const ADMIN_ORDERS_PER_PAGE = 10;
+/** The days an admin picks are Tehran calendar days, whatever zone the server runs in. */
+function createdAtRange(
+  from: string | null,
+  to: string | null,
+): Prisma.OrderWhereInput {
+  if (!from && !to) return {};
+  return {
+    createdAt: {
+      ...(from ? { gte: tehranDayStart(from) } : {}),
+      ...(to ? { lte: tehranDayEnd(to) } : {}),
+    },
+  };
+}
 
 export async function getAllOrdersForAdmin(
-  filters: AdminOrdersFilters = {},
+  params: OrdersParams,
 ): Promise<AdminOrdersResult> {
-  const { search, date } = filters;
-  const page = filters.page && filters.page > 0 ? filters.page : 1;
-  const perPage =
-    filters.perPage && filters.perPage > 0
-      ? filters.perPage
-      : ADMIN_ORDERS_PER_PAGE;
-
-  let dateRange: { gte: Date; lt: Date } | undefined;
-  if (date) {
-    const startOfDay = new Date(`${date}T00:00:00`);
-    dateRange = {
-      gte: startOfDay,
-      lt: new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000),
-    };
-  }
+  const { search, from, to, type, perPage } = params;
 
   // Built once and reused for both findMany and count, so the total
   // (and therefore totalPages) always matches exactly what's paginated.
@@ -78,7 +54,7 @@ export async function getAllOrdersForAdmin(
   // project's SQLite/Turso database.
   // Search also matches walkInCustomerName, since an in-person order
   // has no linked `user` to search by name through.
-  const where = {
+  const where: Prisma.OrderWhereInput = {
     ...(search
       ? {
           OR: [
@@ -88,19 +64,26 @@ export async function getAllOrdersForAdmin(
           ],
         }
       : {}),
-    ...(dateRange ? { createdAt: dateRange } : {}),
+    ...createdAtRange(from, to),
+    ...(type === "online"
+      ? { source: "ONLINE" }
+      : type === "in_person"
+        ? { source: "IN_PERSON" }
+        : {}),
   };
 
-  const [orders, totalCount] = await Promise.all([
-    prisma.order.findMany({
-      where,
-      include: { user: true },
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * perPage,
-      take: perPage,
-    }),
-    prisma.order.count({ where }),
-  ]);
+  const totalCount = await prisma.order.count({ where });
+  const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
+  // ?page=999 on a short list shows the last page instead of an empty table.
+  const page = Math.min(params.page, totalPages);
+
+  const orders = await prisma.order.findMany({
+    where,
+    include: { user: true },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    skip: (page - 1) * perPage,
+    take: perPage,
+  });
 
   return {
     orders: (
@@ -110,40 +93,91 @@ export async function getAllOrdersForAdmin(
       customer: o.user,
     })),
     totalCount,
-    totalPages: Math.max(1, Math.ceil(totalCount / perPage)),
+    totalPages,
     page,
     perPage,
   };
 }
 
+/**
+ * Orders that count as a sale: paid, and not since cancelled or refunded.
+ * Orders still waiting for payment, abandoned ones and refunded ones brought
+ * in no money, so adding them up would overstate what the shop sold.
+ */
+export const SALE_STATUSES = [
+  "PAID",
+  "PROCESSING",
+  "SHIPPED",
+  "DELIVERED",
+] as const;
+
+export type SalesFigures = { count: number; amount: number };
+
+export type SalesReport = {
+  total: SalesFigures;
+  online: SalesFigures;
+  inPerson: SalesFigures;
+};
+
+/**
+ * Sales for a period, split by how the order was placed. Takes only the
+ * period — not the search box or the order-type filter — because the report
+ * is itself the online / in-person breakdown, and a "type" filter would
+ * blank one half of it. Amounts are what customers paid (after discounts;
+ * shipping is پس‌کرایه, paid to the carrier, so it isn't in `total`).
+ * The period is measured on the order's date, the same date the table shows.
+ */
+export async function getSalesReport(
+  period: Pick<OrdersParams, "from" | "to">,
+): Promise<SalesReport> {
+  const grouped = await prisma.order.groupBy({
+    by: ["source"],
+    where: {
+      status: { in: [...SALE_STATUSES] },
+      ...createdAtRange(period.from, period.to),
+    },
+    _count: { _all: true },
+    _sum: { total: true },
+  });
+
+  const figures = (source: "ONLINE" | "IN_PERSON"): SalesFigures => {
+    const row = grouped.find((g) => g.source === source);
+    return { count: row?._count._all ?? 0, amount: row?._sum.total ?? 0 };
+  };
+  const online = figures("ONLINE");
+  const inPerson = figures("IN_PERSON");
+  return {
+    online,
+    inPerson,
+    total: {
+      count: online.count + inPerson.count,
+      amount: online.amount + inPerson.amount,
+    },
+  };
+}
+
 export async function getOrderForAdmin(id: string) {
-  const order = (await prisma.order.findUnique({ where: { id } })) as {
-    id: string;
-    orderNumber: string;
-    status: string;
-    source: "ONLINE" | "IN_PERSON";
-    total: number;
-    subtotal: number;
-    shippingCost: number;
-    userId: string | null;
-    addressId: string | null;
-    walkInCustomerName: string | null;
-    createdAt: string | Date;
-  } | null;
+  // One query with the relations included — not "load every user and every
+  // address, then search them in memory".
+  const order = await prisma.order.findUnique({
+    where: { id },
+    include: {
+      user: {
+        select: { id: true, name: true, email: true, phoneNumber: true },
+      },
+      address: true,
+      discountCode: { select: { code: true } },
+      items: true,
+    },
+  });
   if (!order) return null;
 
-  const [users, addresses, items] = await Promise.all([
-    prisma.user.findMany({}) as unknown as Promise<UserRow[]>,
-    prisma.address.findMany({}) as unknown as Promise<AddressRow[]>,
-    prisma.orderItem.findMany({ where: { orderId: id } }) as unknown as Promise<
-      OrderItemRow[]
-    >,
-  ]);
-
+  const { user, address, discountCode, items, ...rest } = order;
   return {
-    ...order,
-    customer: users.find((u) => u.id === order.userId) ?? null,
-    address: addresses.find((a) => a.id === order.addressId) ?? null,
+    ...rest,
+    customer: user,
+    address,
+    discountCodeText: discountCode?.code ?? null,
     items,
   };
 }

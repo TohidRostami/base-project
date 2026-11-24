@@ -10,8 +10,10 @@ export type AdminUserRow = {
 };
 
 export async function getAllUsers(): Promise<AdminUserRow[]> {
-  const users = (await prisma.user.findMany({})) as unknown as AdminUserRow[];
-  return users.sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  );
+  // Newest first, sorted by the database. Capped: this page has no
+  // pagination yet, and loading an unbounded user table would not scale.
+  return prisma.user.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 500,
+  }) as unknown as Promise<AdminUserRow[]>;
 }

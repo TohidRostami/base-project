@@ -34,6 +34,7 @@ export type ProductDTO = {
   slug: string;
   name: string;
   description: string;
+  materialCare?: string | null;
   price: number;
   compareAtPrice: number | null;
   isNew: boolean;
@@ -41,10 +42,13 @@ export type ProductDTO = {
   isPublished: boolean;
   metaTitle: string | null;
   metaDescription: string | null;
-  inStock: boolean; // <-- new
+  inStock: boolean;
   category: CategoryDTO;
   images: ProductImageDTO[];
   colors: ColorDTO[];
+  /** Average of approved reviews (null when there are none). Storefront queries only. */
+  rating?: number | null;
+  reviewCount?: number;
 };
 
 export type ProductVariantDTO = {

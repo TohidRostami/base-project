@@ -27,7 +27,7 @@ const RouteTransitionContext =
  */
 export function RouteTransitionProvider({
   children,
-  barClassName = "bg-red-600",
+  barClassName = "bg-foreground",
 }: {
   children: ReactNode;
   /** رنگ نوار بالای صفحه — با کلاس Tailwind خودت (مثلاً "bg-brand") عوضش کن. */

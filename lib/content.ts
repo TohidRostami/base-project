@@ -1,63 +1,23 @@
 import siteConfigJson from "@/content/site-config.json";
+
 export type NavLink = { label: string; href: string };
 export type FooterColumn = { title: string; links: NavLink[] };
-export type Category = { slug: string; title: string; description: string };
+export type TextSection = { id: string; title: string; paragraphs: string[] };
 
-export type SiteConfig = {
-  site: {
-    name: string;
-    nameLatin: string;
-    tagline: string;
-    shortDescription: string;
-    description: string;
-    url: string;
-    locale: string;
-    keywords: string[];
-  };
-  theme: {
-    colors: Record<string, string>;
-    radius: string;
-  };
-  contact: {
-    phone: string;
-    mobile: string;
-    email: string;
-    address: string;
-    mapUrl: string;
-    workingHours: string;
-  };
-  social: Record<string, string>;
-  nav: {
-    main: NavLink[];
-    footerColumns: FooterColumn[];
-  };
-  home: {
-    hero: {
-      eyebrow: string;
-      headline: string;
-      subheadline: string;
-      ctaPrimary: NavLink;
-      ctaSecondary: NavLink;
-    };
-    valueProps: { title: string; description: string }[];
-    categoriesTitle: string;
-    featuredTitle: string;
-    featuredSubtitle: string;
-    philosophy: { eyebrow: string; title: string; body: string };
-    newsletter: {
-      title: string;
-      description: string;
-      placeholder: string;
-      cta: string;
-    };
-  };
-  categories: Category[];
-  ui: Record<string, string>;
-  seo: {
-    defaultTitle: string;
-    titleTemplate: string;
-    defaultDescription: string;
-  };
-};
+export type SiteConfig = typeof siteConfigJson;
 
-export const siteConfig = siteConfigJson as SiteConfig;
+export const siteConfig: SiteConfig = siteConfigJson;
+
+/** The canonical public URL — the env var wins so staging/preview
+ * deployments generate correct absolute links, sitemap and OG data. */
+export const siteUrl = (
+  process.env.NEXT_PUBLIC_SITE_URL || siteConfig.site.url
+).replace(/\/$/, "");
+
+/** Fills `{key}` placeholders in config strings, e.g. "{threshold}". */
+export function fillTemplate(
+  text: string,
+  values: Record<string, string>,
+): string {
+  return text.replace(/\{(\w+)\}/g, (_, key: string) => values[key] ?? "");
+}

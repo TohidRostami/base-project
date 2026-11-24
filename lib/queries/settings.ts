@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db";
 
 export type SiteSettings = {
@@ -14,8 +15,22 @@ const DEFAULTS: SiteSettings = {
   standardShippingCost: 0,
 };
 
+/** Always reads the database — use this for anything money-related (checkout). */
 export async function getSiteSettings(): Promise<SiteSettings> {
-  const settings = await prisma.siteSetting.findUnique({ where: { id: "singleton" } });
-  if (!settings) return DEFAULTS;
-  return settings as unknown as SiteSettings;
+  const s = await prisma.siteSetting.findUnique({ where: { id: "singleton" } });
+  if (!s) return DEFAULTS;
+  return {
+    emailLoginEnabled: s.emailLoginEnabled,
+    smsLoginEnabled: s.smsLoginEnabled,
+    freeShippingThreshold: s.freeShippingThreshold,
+    standardShippingCost: s.standardShippingCost,
+  };
 }
+
+/**
+ * Same data, cached for 60 seconds — for display only (header banner,
+ * cart estimate). Changes made in the admin panel show up within a minute.
+ */
+export const getSiteSettingsCached = unstable_cache(getSiteSettings, ["site-settings"], {
+  revalidate: 60,
+});

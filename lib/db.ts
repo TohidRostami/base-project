@@ -1,5 +1,4 @@
 import { PrismaClient } from "@/lib/generated/prisma";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
 
 /**
@@ -8,6 +7,14 @@ import { PrismaLibSql } from "@prisma/adapter-libsql";
  * Production on Vercel (TURSO_DATABASE_URL set) → the same schema over
  * Turso/libSQL. Nothing else in the app changes between the two.
  */
+// Loaded lazily: better-sqlite3 is a native module, and a production
+// deployment on Turso should never have to load (or fail to load) it.
+function localSqliteAdapter() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return (require("@prisma/adapter-better-sqlite3") as typeof import("@prisma/adapter-better-sqlite3"))
+    .PrismaBetterSqlite3;
+}
+
 function createPrismaClient() {
   const tursoUrl = process.env.TURSO_DATABASE_URL;
 
@@ -16,7 +23,7 @@ function createPrismaClient() {
         url: tursoUrl,
         authToken: process.env.TURSO_AUTH_TOKEN,
       })
-    : new PrismaBetterSqlite3({
+    : new (localSqliteAdapter())({
         url: process.env.DATABASE_URL ?? "file:./prisma/dev.db",
       });
 

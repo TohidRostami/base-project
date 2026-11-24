@@ -1,66 +1,67 @@
 import { prisma } from "@/lib/db";
 
-export type CustomerOrderItemDTO = {
-  id: string;
-  name: string;
-  size: string | null;
-  color: string | null;
-  price: number;
-  quantity: number;
-};
-
-export type CustomerOrderDTO = {
+export type CustomerOrderSummary = {
   id: string;
   orderNumber: string;
   status: string;
-  subtotal: number;
-  shippingCost: number;
   total: number;
-  createdAt: string | Date;
-  items: CustomerOrderItemDTO[];
+  createdAt: Date;
+  itemCount: number;
+  itemNames: string[];
 };
 
 /**
- * A customer's own order history, most recent first, each with its
- * line items. `userId` must come from a verified session (see usage
- * example) — this function itself does no auth check, so it must never
- * be called with a user-supplied id.
+ * A customer's own order history, newest first. `userId` must come from a
+ * verified session. Unpaid orders that were cancelled (abandoned checkouts)
+ * are left out — they'd only be noise.
  */
-export async function getOrdersForCustomer(userId: string): Promise<CustomerOrderDTO[]> {
+export async function getOrdersForCustomer(
+  userId: string,
+  take?: number,
+): Promise<CustomerOrderSummary[]> {
   const orders = await prisma.order.findMany({
-    where: { userId },
-    include: { items: true },
+    where: { userId, NOT: { status: "CANCELLED", paidAt: null } },
+    include: { items: { select: { name: true, quantity: true } } },
     orderBy: { createdAt: "desc" },
+    take,
   });
-
-  return orders as unknown as CustomerOrderDTO[];
+  return orders.map((o) => ({
+    id: o.id,
+    orderNumber: o.orderNumber,
+    status: o.status,
+    total: o.total,
+    createdAt: o.createdAt,
+    itemCount: o.items.reduce((n, i) => n + i.quantity, 0),
+    itemNames: o.items.map((i) => i.name),
+  }));
 }
 
-export type CustomerOrderDetailItemDTO = {
-  id: string;
-  name: string;
-  size: string | null;
-  color: string | null;
-  price: number;
-  quantity: number;
-  productSlug: string | null;
-  /** The image for the specific color/variant that was ordered, when
-   * available; falls back to the product's first image otherwise (e.g.
-   * for older orders placed before the color feature existed). */
-  image: string | null;
-};
+export async function getOrderCounts(userId: string) {
+  const [active, delivered] = await Promise.all([
+    prisma.order.count({
+      where: {
+        userId,
+        status: { in: ["PENDING_PAYMENT", "PAID", "PROCESSING", "SHIPPED"] },
+      },
+    }),
+    prisma.order.count({ where: { userId, status: "DELIVERED" } }),
+  ]);
+  return { active, delivered };
+}
 
-export type CustomerOrderDetailDTO = {
+export type CustomerOrderDetail = {
   id: string;
   orderNumber: string;
   status: string;
   subtotal: number;
   discountAmount: number;
   shippingCost: number;
+  /** POST | TIPAX (both پس‌کرایه); null for orders from before it was recorded. */
+  shippingMethod: string | null;
   total: number;
-  gatewayRef: string | null;
-  paidAt: string | Date | null;
-  createdAt: string | Date;
+  paymentRefId: string | null;
+  paidAt: Date | null;
+  createdAt: Date;
   address: {
     fullName: string;
     phone: string;
@@ -68,28 +69,29 @@ export type CustomerOrderDetailDTO = {
     city: string;
     addressLine: string;
     postalCode: string;
-  };
-  discountCode: { code: string } | null;
-  items: CustomerOrderDetailItemDTO[];
+  } | null;
+  discountCode: string | null;
+  items: {
+    id: string;
+    name: string;
+    size: string | null;
+    color: string | null;
+    price: number;
+    quantity: number;
+    productSlug: string | null;
+    image: string | null;
+  }[];
 };
 
 /**
- * Full detail for one order — address, discount, payment reference, and
- * every item with a representative image.
- *
- * Security-critical: `id` and `userId` are combined in the *same* where
- * clause (via findFirst, since `id + userId` isn't a declared unique
- * constraint so findUnique can't be used for it) — this means the query
- * itself returns null for an order that exists but belongs to someone
- * else, rather than fetching it and checking ownership as a second
- * step. Never split this into "fetch by id, then check order.userId"
- * — that pattern is easy to accidentally get wrong or forget entirely
- * on a future edit, and the query-level check can't be skipped.
+ * Security-critical: `id` and `userId` are in the *same* where clause, so
+ * the query itself returns null for an order that belongs to someone else.
+ * Never split this into "fetch by id, then check the owner".
  */
 export async function getOrderForCustomer(
   orderId: string,
-  userId: string
-): Promise<CustomerOrderDetailDTO | null> {
+  userId: string,
+): Promise<CustomerOrderDetail | null> {
   const order = await prisma.order.findFirst({
     where: { id: orderId, userId },
     include: {
@@ -97,66 +99,58 @@ export async function getOrderForCustomer(
       discountCode: { select: { code: true } },
       items: {
         include: {
-          product: { select: { slug: true, images: { take: 1, orderBy: { sortOrder: "asc" } } } },
+          product: {
+            select: {
+              slug: true,
+              images: { take: 1, orderBy: { sortOrder: "asc" } },
+            },
+          },
           variant: {
             include: {
-              color: { include: { images: { take: 1, orderBy: { sortOrder: "asc" } } } },
+              color: {
+                include: { images: { take: 1, orderBy: { sortOrder: "asc" } } },
+              },
             },
           },
         },
       },
     },
   });
-
   if (!order) return null;
 
-  const raw = order as unknown as {
-    id: string;
-    orderNumber: string;
-    status: string;
-    subtotal: number;
-    discountAmount: number;
-    shippingCost: number;
-    total: number;
-    gatewayRef: string | null;
-    paidAt: string | Date | null;
-    createdAt: string | Date;
-    address: CustomerOrderDetailDTO["address"];
-    discountCode: { code: string } | null;
-    items: {
-      id: string;
-      name: string;
-      size: string | null;
-      color: string | null;
-      price: number;
-      quantity: number;
-      product: { slug: string; images: { url: string }[] } | null;
-      variant: { color: { images: { url: string }[] } | null } | null;
-    }[];
-  };
-
   return {
-    id: raw.id,
-    orderNumber: raw.orderNumber,
-    status: raw.status,
-    subtotal: raw.subtotal,
-    discountAmount: raw.discountAmount,
-    shippingCost: raw.shippingCost,
-    total: raw.total,
-    gatewayRef: raw.gatewayRef,
-    paidAt: raw.paidAt,
-    createdAt: raw.createdAt,
-    address: raw.address,
-    discountCode: raw.discountCode,
-    items: raw.items.map((item) => ({
-      id: item.id,
-      name: item.name,
-      size: item.size,
-      color: item.color,
-      price: item.price,
-      quantity: item.quantity,
-      productSlug: item.product?.slug ?? null,
-      image: item.variant?.color?.images[0]?.url ?? item.product?.images[0]?.url ?? null,
+    id: order.id,
+    orderNumber: order.orderNumber,
+    status: order.status,
+    subtotal: order.subtotal,
+    discountAmount: order.discountAmount,
+    shippingCost: order.shippingCost,
+    shippingMethod: order.shippingMethod,
+    total: order.total,
+    paymentRefId: order.paymentRefId,
+    paidAt: order.paidAt,
+    createdAt: order.createdAt,
+    address: order.address
+      ? {
+          fullName: order.address.fullName,
+          phone: order.address.phone,
+          province: order.address.province,
+          city: order.address.city,
+          addressLine: order.address.addressLine,
+          postalCode: order.address.postalCode,
+        }
+      : null,
+    discountCode: order.discountCode?.code ?? null,
+    items: order.items.map((i) => ({
+      id: i.id,
+      name: i.name,
+      size: i.size,
+      color: i.color,
+      price: i.price,
+      quantity: i.quantity,
+      productSlug: i.product?.slug ?? null,
+      image:
+        i.variant?.color?.images[0]?.url ?? i.product?.images[0]?.url ?? null,
     })),
   };
 }

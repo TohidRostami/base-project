@@ -16,7 +16,7 @@ export function AdminMobileHeader({ role }: { role?: string }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="flex items-center justify-start border-b border-border bg-background px-4 py-3 lg:hidden">
+    <div className="flex items-center justify-start border-b border-border bg-background px-4 py-3 lg:hidden print:hidden">
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>
           <Button variant="ghost" size="icon" aria-label="باز کردن منوی مدیریت">
@@ -30,7 +30,7 @@ export function AdminMobileHeader({ role }: { role?: string }) {
           <AdminNav onNavigate={() => setOpen(false)} role={role} />
         </SheetContent>
       </Sheet>
-      <span className="text-sm font-medium">پنل مدیریت هاشور</span>
+      <span className="text-sm font-medium">پنل مدیریت نیکیا</span>
     </div>
   );
 }

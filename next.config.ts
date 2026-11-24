@@ -1,5 +1,18 @@
 import type { NextConfig } from "next";
 
+const isDev = process.env.NODE_ENV !== "production";
+
+// A custom image domain/CDN in front of the storage bucket, if configured.
+const extraImageHost = (() => {
+  try {
+    return process.env.ARVAN_PUBLIC_URL_BASE
+      ? new URL(process.env.ARVAN_PUBLIC_URL_BASE).hostname
+      : null;
+  } catch {
+    return null;
+  }
+})();
+
 const securityHeaders = [
   { key: "X-Frame-Options", value: "SAMEORIGIN" },
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -21,7 +34,8 @@ const securityHeaders = [
       // 'unsafe-inline' is only for the JSON-LD <script> tags on product
       // pages; tighten this to a nonce-based policy if that script is
       // ever removed.
-      "script-src 'self' 'unsafe-inline'",
+      // Next's dev server needs eval for React's debugging features.
+      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
@@ -42,8 +56,13 @@ const nextConfig: NextConfig = {
       // ArvanCloud Object Storage — see README → "اتصال Object Storage
       // آروان‌کلاد". Covers both regional endpoints and any custom
       // ARVAN_PUBLIC_URL_BASE domain you configure.
-      { protocol: "https", hostname: "*.arvanstorage.ir" },
-      { protocol: "https", hostname: "*.arvanstorage.com" },
+      // "**." matches any number of sub-domain levels; Hi_ops endpoints such as
+      // hot.ir-central1.arvanstorage.ir have more than one.
+      { protocol: "https", hostname: "**.arvanstorage.ir" },
+      { protocol: "https", hostname: "**.arvanstorage.com" },
+      ...(extraImageHost
+        ? [{ protocol: "https" as const, hostname: extraImageHost }]
+        : []),
     ],
   },
   experimental: {

@@ -1,93 +1,45 @@
 import { cn } from "@/lib/utils";
 
-export type GarmentVariant =
-  | "shirts"
-  | "tshirts"
-  | "pants"
-  | "outerwear"
-  | "shoes"
-  | "accessories";
+export type GarmentKind = "manto" | "shomiz" | "tshirt" | "dress" | "jeans" | "skirt";
 
-const common = {
-  fill: "none",
-  strokeWidth: 1.6,
-  strokeLinecap: "round" as const,
-  strokeLinejoin: "round" as const,
-};
+const KNOWN: GarmentKind[] = ["manto", "shomiz", "tshirt", "dress", "jeans", "skirt"];
 
-/**
- * Minimal fashion-flat style line icons — deliberately abstract, not
- * photographic. Used as product-image placeholders until real photography
- * is uploaded through the admin panel. Ties to the هاشور (hatching /
- * technical-drawing) concept instead of faking a product photo.
- */
-function GarmentPath({ variant }: { variant: GarmentVariant }) {
-  switch (variant) {
-    case "shirts":
-      return (
-        <g {...common}>
-          <path d="M40 24 L50 32 L60 24 L74 30 L80 46 L70 50 L68 40 L68 84 L32 84 L32 40 L30 50 L20 46 L26 30 Z" />
-          <line x1="50" y1="38" x2="50" y2="80" strokeDasharray="1 5" />
-          <rect x="41" y="42" width="12" height="14" />
-        </g>
-      );
-    case "tshirts":
-      return (
-        <g {...common}>
-          <path d="M38 26 Q50 34 62 26 L78 34 L72 46 L66 41 L66 84 L34 84 L34 41 L28 46 L22 34 Z" />
-        </g>
-      );
-    case "pants":
-      return (
-        <g {...common}>
-          <path d="M32 20 H68 L70 30 H30 Z" />
-          <path d="M31 30 L34 84 L46 84 L50 40 L54 84 L66 84 L69 30 Z" />
-          <line x1="50" y1="30" x2="50" y2="40" />
-        </g>
-      );
-    case "outerwear":
-      return (
-        <g {...common}>
-          <path d="M38 22 L50 30 L62 22 L78 30 L84 48 L72 53 L70 42 L70 86 L30 86 L30 42 L28 53 L16 48 L22 30 Z" />
-          <line x1="50" y1="30" x2="50" y2="86" />
-          <line x1="30" y1="58" x2="70" y2="58" strokeDasharray="1 5" />
-        </g>
-      );
-    case "shoes":
-      return (
-        <g {...common}>
-          <path d="M14 68 L14 55 Q14 50 19 48 L26 45 Q34 42 42 43 L58 44 Q68 45 76 51 L82 56 Q86 59 85 63 Q84 67 79 67 L14 68 Z" />
-          <line x1="26" y1="45" x2="30" y2="51" />
-          <line x1="38" y1="43" x2="41" y2="50" />
-        </g>
-      );
-    case "accessories":
-      return (
-        <g {...common}>
-          <rect x="16" y="44" width="68" height="14" rx="3" />
-          <rect x="42" y="40" width="16" height="22" rx="2" />
-          <line x1="46" y1="51" x2="54" y2="51" />
-        </g>
-      );
-    default:
-      return null;
-  }
+/** Maps a category slug to a silhouette; unknown categories fall back to a dress. */
+export function garmentKind(categorySlug: string | null | undefined): GarmentKind {
+  return (KNOWN as string[]).includes(categorySlug ?? "") ? (categorySlug as GarmentKind) : "dress";
 }
 
-export function GarmentGlyph({
-  variant,
-  className,
-}: {
-  variant: GarmentVariant;
-  className?: string;
-}) {
+const PATHS: Record<GarmentKind, string[]> = {
+  tshirt: ["M30 20 L42 16 Q50 24 58 16 L70 20 L88 36 L78 46 L70 40 L70 100 L30 100 L30 40 L22 46 L12 36 Z"],
+  shomiz: [
+    "M32 18 L44 14 L50 22 L56 14 L68 18 L90 60 L80 64 L70 44 L70 104 L30 104 L30 44 L20 64 L10 60 Z",
+    "M50 22 L50 104",
+  ],
+  manto: [
+    "M34 14 L46 12 L50 20 L54 12 L66 14 L86 40 L84 98 L74 98 L72 52 L70 112 L30 112 L28 52 L26 98 L16 98 L14 40 Z",
+    "M50 20 L50 112",
+  ],
+  dress: ["M40 12 L46 12 Q50 20 54 12 L60 12 L64 44 L84 112 L16 112 L36 44 Z", "M36 44 L64 44"],
+  jeans: ["M30 10 L70 10 L74 112 L54 112 L50 40 L46 112 L26 112 Z", "M30 20 L70 20"],
+  skirt: ["M32 20 L68 20 L86 108 L14 108 Z", "M32 30 L68 30"],
+};
+
+/** A quiet line-drawing of a garment, used wherever a product has no photo yet. */
+export function GarmentGlyph({ kind, className }: { kind: GarmentKind; className?: string }) {
   return (
     <svg
-      viewBox="0 0 100 100"
-      className={cn("stroke-current", className)}
+      viewBox="0 0 100 120"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.1"
+      strokeLinejoin="round"
+      strokeLinecap="round"
+      className={cn("h-1/2 w-1/2", className)}
       aria-hidden="true"
     >
-      <GarmentPath variant={variant} />
+      {PATHS[kind].map((d) => (
+        <path key={d} d={d} />
+      ))}
     </svg>
   );
 }

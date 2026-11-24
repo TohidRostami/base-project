@@ -4,7 +4,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 const inputStyles = cn(
-  "flex h-11 w-full min-w-0 rounded-md border border-input bg-background px-3.5 py-1 text-sm text-foreground transition-colors outline-none",
+  "flex h-11 w-full min-w-0 rounded-sm border border-input bg-white px-3.5 py-1 text-sm text-foreground transition-colors outline-none",
   "placeholder:text-muted-foreground",
   "focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40",
   "disabled:cursor-not-allowed disabled:opacity-50",
@@ -40,16 +40,12 @@ function NumberInputWithSeparator({
   const [displayValue, setDisplayValue] = React.useState(() => formatWithSeparators(rawValue));
 
   // Keeps the display in sync if the parent changes `value` from the
-  // outside (loading an existing record into an edit form, resetting
-  // the form, etc.) — but only when it actually differs from what's
-  // already shown, so this doesn't fight with the user's own typing.
-  React.useEffect(() => {
-    const currentRaw = displayValue.replace(/[^0-9]/g, "");
-    if (currentRaw !== rawValue) {
-      setDisplayValue(formatWithSeparators(rawValue));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawValue]);
+  // outside (loading a record into an edit form, resetting the form) —
+  // adjusted during render, and only when it differs from what's shown, so
+  // it doesn't fight with the user's own typing.
+  if (displayValue.replace(/[^0-9]/g, "") !== rawValue) {
+    setDisplayValue(formatWithSeparators(rawValue));
+  }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const el = e.target;

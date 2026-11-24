@@ -1,40 +1,32 @@
-import Link from "next/link";
 import { ProductCard } from "@/components/shared/product-card";
-import { Reveal } from "@/components/shared/reveal";
-import { getFeaturedProducts } from "@/lib/queries/products";
-import { siteConfig } from "@/lib/content";
-import { ArrowLeft } from "lucide-react";
+import { SectionHeading } from "@/components/shared/section-heading";
+import type { ProductDTO } from "@/lib/types";
 
-export async function FeaturedProducts() {
-  const products = await getFeaturedProducts(4);
-
+export function FeaturedProducts({
+  eyebrow,
+  title,
+  products,
+}: {
+  eyebrow: string;
+  title: string;
+  products: ProductDTO[];
+}) {
   if (products.length === 0) return null;
 
   return (
-    <section className="mx-auto max-w-7xl px-4 py-15 sm:px-6 lg:px-8">
-      <Reveal className="flex items-end justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold sm:text-3xl">
-            {siteConfig.home.featuredTitle}
-          </h2>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            {siteConfig.home.featuredSubtitle}
-          </p>
-        </div>
-        <Link
-          href="/products"
-          className="hidden lg:flex lg:gap-1 lg:items-center lg:border lg:rounded-2xl lg:p-2 text-sm text-muted-foreground transition-colors hover:text-foreground sm:inline-block"
-        >
-          مشاهده همه
-          <ArrowLeft size={20} />
-        </Link>
-      </Reveal>
-
-      <div className="mt-9 grid grid-cols-2 gap-x-4 gap-y-9 lg:grid-cols-4">
-        {products.map((product, i) => (
-          <Reveal key={product.id} delay={Math.min(i * 0.08, 0.3)}>
-            <ProductCard product={product} />
-          </Reveal>
+    <section className="wrap pt-[clamp(56px,7vw,88px)]">
+      <SectionHeading
+        eyebrow={eyebrow}
+        title={title}
+        href="/products"
+        linkLabel="همه محصولات"
+      />
+      <div
+        className="grid gap-[clamp(12px,2vw,30px)] [grid-template-columns:repeat(auto-fill,minmax(150px,1fr))] md:[grid-template-columns:repeat(auto-fill,minmax(210px,1fr))] lg:[grid-template-columns:repeat(auto-fill,minmax(230px,1fr))]"
+      >
+        {products.slice(0,4).map((p, i) => (
+          // The first row is above the fold on most screens — load its images eagerly.
+          <ProductCard key={p.id} product={p} priority={i < 4} />
         ))}
       </div>
     </section>

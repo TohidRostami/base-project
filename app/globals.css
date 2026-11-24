@@ -1,88 +1,81 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "@fontsource/gowun-batang/400.css";
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --radius: 0.375rem;
+  --radius: 0.5rem;
 
-  /* Self-hosted via @fontsource — avoids a runtime dependency on the
-     Google Fonts CDN, which can be unreliable for visitors in Iran. */
-  --font-vazirmatn: "Vazirmatn Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-plex-mono: "IBM Plex Mono", ui-monospace, "Menlo", monospace;
+  /* Self-hosted through @fontsource (see app/layout.tsx) — no runtime
+     dependency on the Google Fonts CDN, which is unreliable for visitors
+     in Iran and blocked by the CSP anyway. */
+  --font-estedad: "Estedad Variable", "Vazirmatn Variable", Tahoma, ui-sans-serif, system-ui, sans-serif;
 
-  /* ---- هاشور brand palette (source of truth) ---- */
-  --brand-primary: #080808; /* Primary / Black */
-  --brand-secondary: #1d1c1b; /* Secondary / Charcoal */
-  --brand-background: #f2f1ec; /* Background / Warm White */
-  --brand-surface: #e3e1db; /* Surface / Warm Gray */
-  --brand-text: #171716; /* Text / Near Black */
-  --brand-muted: #898783; /* Muted / Warm Gray */
-  --brand-accent: #584f48; /* Accent / Walnut */
-  --brand-accent-2: #4b5979; /* Accent 2 / Dusty Blue */
-  --brand-dark-blue: #1f2530;
-  --brand-light-blue:#779ACE;
-  --brand-cream-white:#F1ECE1;
-  --brand-taupe: #A89C8E;
-  --brand-destructive: #a13b2a; /* Muted rust — matched to the warm palette */
+  /* ---- نیکیا brand palette (source of truth) ----
+     Keep in sync with theme.colors in content/site-config.json. */
+  --brand-ink: #161412; /* text, buttons */
+  --brand-paper: #faf8f5; /* page background */
+  --brand-sand: #f2ede6; /* hero / soft panels */
+  --brand-sand-2: #ede6dc; /* promo cards */
+  --brand-sand-3: #e4dcd0; /* image placeholders, deeper panels */
+  --brand-line: #d8d0c4; /* input borders */
+  --brand-hairline: #ece6dd; /* dividers */
+  --brand-muted: #7a6f63; /* secondary text */
+  --brand-body: #5e554b; /* paragraph text */
+  --brand-sale: #8a3b2e; /* discount badge / errors */
+  --brand-success: #3c5230;
+  --brand-success-bg: #e4ebdd;
 
-  --background: var(--brand-background);
-  --foreground: var(--brand-text);
+  --background: var(--brand-paper);
+  --foreground: var(--brand-ink);
 
-  --card: var(--brand-background);
-  --card-foreground: var(--brand-text);
+  --card: #ffffff;
+  --card-foreground: var(--brand-ink);
 
-  --popover: var(--brand-background);
-  --popover-foreground: var(--brand-text);
+  --popover: #ffffff;
+  --popover-foreground: var(--brand-ink);
 
-  --primary: var(--brand-primary);
-  --primary-foreground: var(--brand-background);
+  --primary: var(--brand-ink);
+  --primary-foreground: var(--brand-paper);
 
-  --secondary: var(--brand-surface);
-  --secondary-foreground: var(--brand-text);
+  --secondary: var(--brand-sand);
+  --secondary-foreground: var(--brand-ink);
 
-  --muted: var(--brand-surface);
+  --muted: var(--brand-sand);
   --muted-foreground: var(--brand-muted);
 
-  --accent: var(--brand-accent);
-  --accent-foreground: var(--brand-background);
+  --accent: var(--brand-sand-2);
+  --accent-foreground: var(--brand-ink);
 
-  --accent-2: var(--brand-accent-2);
-  --accent-2-foreground: var(--brand-background);
+  /* Cool accent, taken from the denim swatch — used by the admin panel's
+     status chips. */
+  --accent-2: #5b6b80;
+  --accent-2-foreground: var(--brand-paper);
 
-  --destructive: var(--brand-destructive);
-  --destructive-foreground: var(--brand-background);
+  --destructive: var(--brand-sale);
+  --destructive-foreground: var(--brand-paper);
 
-  --success: #3f6b4a;
-  --success-foreground: var(--brand-background);
+  --success: var(--brand-success);
+  --success-foreground: var(--brand-paper);
 
-  --border: color-mix(in srgb, var(--brand-muted) 32%, transparent);
-  --input: color-mix(in srgb, var(--brand-muted) 38%, transparent);
-  --ring: var(--brand-accent-2);
+  --border: var(--brand-hairline);
+  --input: var(--brand-line);
+  --ring: var(--brand-ink);
 
-  --chart-1: var(--brand-primary);
-  --chart-2: var(--brand-accent);
-  --chart-3: var(--brand-accent-2);
-  --chart-4: #a99c8f;
-  --chart-5: #8b98ae;
+  --chart-1: var(--brand-ink);
+  --chart-2: #8c6a4f;
+  --chart-3: #5b6b80;
+  --chart-4: #d9cbb5;
+  --chart-5: #8da0b8;
 
-  --sidebar: var(--brand-secondary);
-  --sidebar-foreground: var(--brand-background);
-  --sidebar-primary: var(--brand-background);
-  --sidebar-primary-foreground: var(--brand-secondary);
-  --sidebar-accent: color-mix(
-    in srgb,
-    var(--brand-background) 12%,
-    var(--brand-secondary)
-  );
-  --sidebar-accent-foreground: var(--brand-background);
-  --sidebar-border: color-mix(
-    in srgb,
-    var(--brand-background) 14%,
-    var(--brand-secondary)
-  );
-  --sidebar-ring: var(--brand-accent-2);
+  --sidebar: var(--brand-ink);
+  --sidebar-foreground: var(--brand-paper);
+  --sidebar-primary: var(--brand-paper);
+  --sidebar-primary-foreground: var(--brand-ink);
+  --sidebar-accent: color-mix(in srgb, var(--brand-paper) 12%, var(--brand-ink));
+  --sidebar-accent-foreground: var(--brand-paper);
+  --sidebar-border: color-mix(in srgb, var(--brand-paper) 14%, var(--brand-ink));
+  --sidebar-ring: var(--brand-line);
 }
 
 @theme inline {
@@ -109,10 +102,16 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-dark-blue: var(--brand-dark-blue);
-  --color-light-blue: var(--brand-light-blue);
-  --color-cream-white: var(--brand-cream-white);
-  --color-taupe: var(--brand-taupe);
+  --color-ink: var(--brand-ink);
+  --color-paper: var(--brand-paper);
+  --color-sand: var(--brand-sand);
+  --color-sand-2: var(--brand-sand-2);
+  --color-sand-3: var(--brand-sand-3);
+  --color-line: var(--brand-line);
+  --color-hairline: var(--brand-hairline);
+  --color-body: var(--brand-body);
+  --color-sale: var(--brand-sale);
+  --color-success-bg: var(--brand-success-bg);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -127,13 +126,12 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  --font-sans: var(--font-vazirmatn);
-  --font-mono: var(--font-plex-mono);
+  --font-sans: var(--font-estedad);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 6px);
+  --radius-xl: calc(var(--radius) + 2px);
 }
 
 @layer base {
@@ -145,13 +143,21 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "ss01";
   }
-  /* Numerals, prices and codes always render in the mono face with Latin
-     digits — a deliberate "technical spec sheet" choice tied to the هاشور
-     (hatching / technical-drawing) concept, kept separate from Persian
-     body copy so word-joining is never disturbed by tracking. */
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+  ::selection {
+    background: var(--brand-sand-3);
+  }
+  :focus-visible {
+    outline: 2px solid var(--brand-ink);
+    outline-offset: 2px;
+  }
+  /* Codes, order numbers and other LTR tokens inside RTL text. */
   .font-nums {
-    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
     direction: ltr;
     unicode-bidi: isolate;
@@ -159,17 +165,46 @@
 }
 
 @layer components {
-  /* Reusable hairline hatching texture — the brand's recurring visual
-     signature, used sparingly as section dividers / card corners. */
-  .hatch-bg {
-    background-image: repeating-linear-gradient(
-      -45deg,
-      color-mix(in srgb, var(--brand-text) 7%, transparent) 0,
-      color-mix(in srgb, var(--brand-text) 7%, transparent) 1px,
-      transparent 1px,
-      transparent 7px
-    );
+  /* The page's content column — same width and gutters everywhere. */
+  .wrap {
+    @apply mx-auto w-full max-w-[1320px] px-4 sm:px-6 lg:px-10;
   }
+}
+
+/* Horizontal scroll areas (category strip, size chips) without a visible bar. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* The one orchestrated moment on the storefront: the hero copy rises in
+   once on load. Everything else is motion in response to a click. */
+@keyframes nikia-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.hero-rise > * {
+  animation: nikia-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.hero-rise > *:nth-child(2) {
+  animation-delay: 0.08s;
+}
+.hero-rise > *:nth-child(3) {
+  animation-delay: 0.16s;
+}
+.hero-rise > *:nth-child(4) {
+  animation-delay: 0.24s;
+}
+.hero-rise > *:nth-child(5) {
+  animation-delay: 0.32s;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -4,26 +4,34 @@ import { phoneNumber } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
 
 import { prisma } from "@/lib/db";
+import { siteUrl } from "@/lib/content";
+import { isIranMobile, phoneToLocal } from "@/lib/format";
 import { sendOtpSms } from "@/lib/sms";
+
+// The site URL plus any extra origins (www., preview domains) from env.
+const trustedOrigins = [
+  siteUrl,
+  ...(process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean),
+];
+
+// Which request header(s) carry the real visitor IP — used for rate limiting
+// and session records. Unset = Better Auth's default (x-forwarded-for).
+// Behind the ArvanCloud CDN set AUTH_IP_HEADERS="ar-real-ip" (see
+// .env.production.example); don't set it anywhere the header can be forged
+// by visitors, e.g. on Vercel.
+const ipAddressHeaders = (process.env.AUTH_IP_HEADERS ?? "")
+  .split(",")
+  .map((h) => h.trim().toLowerCase())
+  .filter(Boolean);
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: "sqlite" }),
   secret: process.env.BETTER_AUTH_SECRET,
-  baseURL: process.env.BETTER_AUTH_URL,
-
-  // Two live domains (haashor.com is canonical, haashor.ir 301-redirects
-  // to it at the Caddy layer — see the deploy kit's Caddyfile) both
-  // still need to be trusted here, since a browser sitting on
-  // haashor.ir sends that as its Origin header on any request made
-  // *before* the redirect completes (e.g. a form submit racing the
-  // redirect, or a cached page). Without this, requests from whichever
-  // domain isn't `baseURL` fail with "Invalid origin".
-  trustedOrigins: [
-    "https://haashor.com",
-    "https://www.haashor.com",
-    "https://haashor.ir",
-    "https://www.haashor.ir",
-  ],
+  baseURL: process.env.BETTER_AUTH_URL ?? siteUrl,
+  trustedOrigins,
 
   // Admin toggles which of these two the storefront actually shows —
   // both stay configured here either way. See lib/queries/settings.ts.
@@ -42,15 +50,29 @@ export const auth = betterAuth({
     },
   },
 
+  advanced: {
+    ...(ipAddressHeaders.length > 0 ? { ipAddress: { ipAddressHeaders } } : {}),
+  },
+
   session: {
     expiresIn: 60 * 60 * 24 * 30, // 30 days
     updateAge: 60 * 60 * 24,
   },
 
+  // Limits live in the database (RateLimit model): on Vercel every request
+  // may hit a different serverless instance, so the default in-memory
+  // limiter would never actually trigger — and each OTP request costs an
+  // SMS, which makes "SMS bombing" a real risk.
   rateLimit: {
     enabled: true,
+    storage: "database",
     window: 60,
-    max: 20,
+    max: 30,
+    customRules: {
+      "/phone-number/send-otp": { window: 120, max: 3 },
+      "/phone-number/verify": { window: 60, max: 10 },
+      "/sign-in/email": { window: 60, max: 8 },
+    },
   },
 
   plugins: [
@@ -58,19 +80,20 @@ export const auth = betterAuth({
       otpLength: 6,
       expiresIn: 300, // 5 minutes
       allowedAttempts: 3,
-      sendOTP: ({ phoneNumber, code }) => {
-        // Fire-and-forget on purpose — awaiting the SMS call here would
-        // slow down the response and can open a timing side-channel
-        // (Better Auth's own recommendation).
-        void sendOtpSms(phoneNumber, code);
+      phoneNumberValidator: (phone) => isIranMobile(phone),
+      sendOTP: async ({ phoneNumber: phone, code }) => {
+        // Awaited on purpose: on Vercel a fire-and-forget promise can be
+        // frozen the moment the response is sent, and the SMS never leaves.
+        const result = await sendOtpSms(phone, code);
+        if (!result.success) throw new Error("SMS delivery failed");
       },
       signUpOnVerification: {
         // Better Auth's core user model requires an email; people who
         // sign up via phone get a non-routable placeholder they never
         // see, and can add a real email later from their account page.
-        getTempEmail: (phoneNumber) =>
-          `${phoneNumber.replace(/[^\d]/g, "")}@hashor-phone.local`,
-        getTempName: (phoneNumber) => phoneNumber,
+        getTempEmail: (phone) =>
+          `${phone.replace(/[^\d]/g, "")}@phone.nikia.local`,
+        getTempName: (phone) => phoneToLocal(phone),
       },
     }),
     nextCookies(), // must stay last — see Better Auth's Next.js integration docs

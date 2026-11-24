@@ -25,6 +25,8 @@ export type ProductFormInput = {
   price: number;
   compareAtPrice: number | null;
   description: string;
+  /** Fabric & care notes — optional. */
+  materialCare: string;
   isPublished: boolean;
   isFeatured: boolean;
   isNew: boolean;
@@ -51,48 +53,95 @@ function validate(input: ProductFormInput): string | null {
   return null;
 }
 
-/** Replaces all of a product's colors/variants/images with the submitted
- * color groups — used by both create and update so the two never drift
- * apart. Deletes children before parents so nothing is orphaned. */
+/**
+ * Makes a product's colors, variants and images match the submitted color
+ * groups — used by both create and update so the two never drift apart.
+ *
+ * Colors are matched by name and variants by (color, size), and updated in
+ * place. That matters: customers' carts and past orders point at variant
+ * ids, so recreating every variant on each save (as a wipe-and-rebuild
+ * would) silently breaks open carts and detaches order history. Only
+ * colors/sizes the admin actually removed are deleted. Everything runs in
+ * one transaction, so a failure can't leave a half-edited product.
+ */
 async function syncColorGroups(
   productId: string,
   colorGroups: ColorGroupInput[],
 ) {
-  const existingImages = (await prisma.productImage.findMany({
-    where: { productId },
-  })) as { url: string }[];
+  const existingImages = await prisma.productImage.findMany({ where: { productId } });
   const keptUrls = new Set(colorGroups.flatMap((g) => g.images));
+
+  await prisma.$transaction(
+    async (tx) => {
+      const existingColors = await tx.color.findMany({ where: { productId } });
+      const byName = new Map(existingColors.map((c) => [c.name, c]));
+      const keptColorIds = new Set<string>();
+
+      // Image rows are cheap and nothing references their ids — rebuild them.
+      await tx.productImage.deleteMany({ where: { productId } });
+
+      for (const [i, group] of colorGroups.entries()) {
+        const name = group.name.trim();
+        const existing = byName.get(name);
+        const color = existing
+          ? await tx.color.update({
+              where: { id: existing.id },
+              data: { hexValue: group.hexValue, sortOrder: i },
+            })
+          : await tx.color.create({
+              data: { productId, name, hexValue: group.hexValue, sortOrder: i },
+            });
+        keptColorIds.add(color.id);
+
+        // Drop sizes that were unticked for this color…
+        await tx.productVariant.deleteMany({
+          where: {
+            productId,
+            colorId: color.id,
+            sizeId: { notIn: group.sizes.map((s) => s.sizeId) },
+          },
+        });
+        // …and update or create the rest.
+        for (const { sizeId, stock } of group.sizes) {
+          const variant = await tx.productVariant.findFirst({
+            where: { productId, colorId: color.id, sizeId },
+            select: { id: true },
+          });
+          if (variant) {
+            await tx.productVariant.update({
+              where: { id: variant.id },
+              data: { stock, version: { increment: 1 } },
+            });
+          } else {
+            await tx.productVariant.create({
+              data: { productId, colorId: color.id, sizeId, stock },
+            });
+          }
+        }
+
+        for (const [j, url] of group.images.entries()) {
+          await tx.productImage.create({
+            data: { productId, colorId: color.id, url, sortOrder: j },
+          });
+        }
+      }
+
+      // Colors removed from the form: variants first (their color FK is
+      // SET NULL, which would otherwise leave orphan variants behind).
+      const removedIds = existingColors.filter((c) => !keptColorIds.has(c.id)).map((c) => c.id);
+      if (removedIds.length > 0) {
+        await tx.productVariant.deleteMany({ where: { productId, colorId: { in: removedIds } } });
+        await tx.color.deleteMany({ where: { id: { in: removedIds } } });
+      }
+    },
+    { maxWait: 10_000, timeout: 30_000 },
+  );
+
+  // Storage cleanup happens after the database commit, never before it.
   for (const img of existingImages) {
     if (!keptUrls.has(img.url)) {
       const key = keyFromUrl(img.url);
       if (key) await deleteFromArvan(key).catch(() => {});
-    }
-  }
-
-  await prisma.productVariant.deleteMany({ where: { productId } });
-  await prisma.productImage.deleteMany({ where: { productId } });
-  await prisma.color.deleteMany({ where: { productId } });
-
-  for (const [i, group] of colorGroups.entries()) {
-    const color = (await prisma.color.create({
-      data: {
-        productId,
-        name: group.name.trim(),
-        hexValue: group.hexValue,
-        sortOrder: i,
-      },
-    })) as { id: string };
-
-    for (const { sizeId, stock } of group.sizes) {
-      await prisma.productVariant.create({
-        data: { productId, colorId: color.id, sizeId, stock },
-      });
-    }
-
-    for (const [j, url] of group.images.entries()) {
-      await prisma.productImage.create({
-        data: { productId, colorId: color.id, url, sortOrder: j },
-      });
     }
   }
 }
@@ -110,6 +159,7 @@ export async function createProduct(input: ProductFormInput) {
       price: input.price,
       compareAtPrice: input.compareAtPrice,
       description: input.description,
+      materialCare: input.materialCare.trim() || null,
       isPublished: input.isPublished,
       isFeatured: input.isFeatured,
       isNew: input.isNew,
@@ -138,6 +188,7 @@ export async function updateProduct(id: string, input: ProductFormInput) {
       price: input.price,
       compareAtPrice: input.compareAtPrice,
       description: input.description,
+      materialCare: input.materialCare.trim() || null,
       isPublished: input.isPublished,
       isFeatured: input.isFeatured,
       isNew: input.isNew,

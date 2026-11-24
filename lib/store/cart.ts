@@ -19,6 +19,8 @@ export type AppliedDiscount = {
   code: string;
   type: "PERCENTAGE" | "FIXED";
   value: number;
+  /** The products the code applies to; null/undefined = the whole cart. */
+  productIds?: string[] | null;
 };
 
 type CartState = {
@@ -77,7 +79,7 @@ export const useCartStore = create<CartState>()(
       setDiscountCode: (discount) => set({ discountCode: discount }),
       clear: () => set({ items: [], discountCode: null }),
     }),
-    { name: "hashor-cart" },
+    { name: "nikia-cart", version: 1 },
   ),
 );
 

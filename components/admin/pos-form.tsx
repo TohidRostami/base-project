@@ -24,7 +24,7 @@ type CartLine = PosOrderItemInput & { key: string };
 export function PosForm() {
   // ── محصول: سرچ + انتخاب رنگ/سایز/تعداد ──────────────────────────
   const [productQuery, setProductQuery] = useState("");
-  const [productResults, setProductResults] = useState<PosProductResult[]>([]);
+  const [rawProductResults, setProductResults] = useState<PosProductResult[]>([]);
   const [selectedProduct, setSelectedProduct] =
     useState<PosProductResult | null>(null);
   const [selectedColorId, setSelectedColorId] = useState<string | null>(null);
@@ -38,7 +38,7 @@ export function PosForm() {
 
   // ── مشتری (اختیاری) ──────────────────────────────────────────────
   const [customerQuery, setCustomerQuery] = useState("");
-  const [customerResults, setCustomerResults] = useState<PosCustomerResult[]>(
+  const [rawCustomerResults, setCustomerResults] = useState<PosCustomerResult[]>(
     [],
   );
   const [selectedCustomer, setSelectedCustomer] =
@@ -48,11 +48,12 @@ export function PosForm() {
   const productInputRef = useRef<HTMLInputElement>(null);
 
   // سرچ محصول با تأخیر — با نام یا کد کالا
+  // Results only show while the box holds a query and nothing is picked yet.
+  const productResults = productQuery.trim() && !selectedProduct ? rawProductResults : [];
+  const customerResults = customerQuery.trim() && !selectedCustomer ? rawCustomerResults : [];
+
   useEffect(() => {
-    if (!productQuery.trim() || selectedProduct) {
-      setProductResults([]);
-      return;
-    }
+    if (!productQuery.trim() || selectedProduct) return;
     const timer = setTimeout(() => {
       searchProducts(productQuery).then(setProductResults);
     }, 300);
@@ -61,10 +62,7 @@ export function PosForm() {
 
   // سرچ مشتری با تأخیر
   useEffect(() => {
-    if (!customerQuery.trim() || selectedCustomer) {
-      setCustomerResults([]);
-      return;
-    }
+    if (!customerQuery.trim() || selectedCustomer) return;
     const timer = setTimeout(() => {
       searchCustomers(customerQuery).then(setCustomerResults);
     }, 300);
@@ -157,15 +155,6 @@ export function PosForm() {
       prev.map((line) => (line.key === key ? { ...line, price } : line)),
     );
   }
-  function updateCartQuantity(key: string, quantity: number) {
-    if (quantity <= 0) {
-      setCart((prev) => prev.filter((line) => line.key !== key));
-      return;
-    }
-    setCart((prev) =>
-      prev.map((line) => (line.key === key ? { ...line, quantity } : line)),
-    );
-  }
   function removeCartLine(key: string) {
     setCart((prev) => prev.filter((line) => line.key !== key));
   }
@@ -193,7 +182,15 @@ export function PosForm() {
     }
     setSubmitting(true);
     const result = await createInPersonOrder({
-      items: cart.map(({ key, ...item }) => item),
+      items: cart.map((line) => ({
+        productId: line.productId,
+        variantId: line.variantId,
+        name: line.name,
+        size: line.size,
+        color: line.color,
+        price: line.price,
+        quantity: line.quantity,
+      })),
       customerUserId: selectedCustomer?.id ?? null,
       walkInCustomerName: selectedCustomer
         ? null

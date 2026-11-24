@@ -63,6 +63,7 @@ export function ProductForm({
     product?.compareAtPrice?.toString() ?? "",
   );
   const [description, setDescription] = useState(product?.description ?? "");
+  const [materialCare, setMaterialCare] = useState(product?.materialCare ?? "");
   const [isPublished, setIsPublished] = useState(product?.isPublished ?? true);
   const [isFeatured, setIsFeatured] = useState(product?.isFeatured ?? false);
   const [isNew, setIsNew] = useState(product?.isNew ?? false);
@@ -202,6 +203,7 @@ export function ProductForm({
       price: Number(price),
       compareAtPrice: compareAtPrice ? Number(compareAtPrice) : null,
       description,
+      materialCare,
       isPublished,
       isFeatured,
       isNew,
@@ -310,6 +312,18 @@ export function ProductForm({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="rounded-md border border-input bg-background px-3.5 py-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="materialCare">جنس و نگهداری (اختیاری)</Label>
+            <textarea
+              id="materialCare"
+              rows={3}
+              value={materialCare}
+              onChange={(e) => setMaterialCare(e.target.value)}
+              placeholder="مثلاً: ۱۰۰٪ کتان. شست‌وشو در دمای ۳۰ درجه، اتو با حرارت متوسط."
+              className="rounded-md border border-input bg-background px-3.5 py-2.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
             />
           </div>
         </div>

@@ -1,44 +1,41 @@
 import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/db";
-import { siteConfig } from "@/lib/content";
+import { siteUrl } from "@/lib/content";
 
-type ProductRow = { slug: string; updatedAt: string | Date };
-type CategoryRow = { slug: string };
+// Reads the catalog, so it must be built per request, not at build time.
+export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = siteConfig.site.url;
-
   const staticRoutes: MetadataRoute.Sitemap = [
-    { url: base, changeFrequency: "daily", priority: 1 },
-    { url: `${base}/products`, changeFrequency: "daily", priority: 0.9 },
-    { url: `${base}/about`, changeFrequency: "monthly", priority: 0.5 },
-    { url: `${base}/contact`, changeFrequency: "monthly", priority: 0.4 },
-    { url: `${base}/faq`, changeFrequency: "monthly", priority: 0.4 },
-    { url: `${base}/size-guide`, changeFrequency: "monthly", priority: 0.4 },
-    { url: `${base}/returns`, changeFrequency: "monthly", priority: 0.4 },
-    { url: `${base}/privacy`, changeFrequency: "yearly", priority: 0.3 },
-    { url: `${base}/terms`, changeFrequency: "yearly", priority: 0.3 },
+    { url: siteUrl, changeFrequency: "daily", priority: 1 },
+    { url: `${siteUrl}/products`, changeFrequency: "daily", priority: 0.9 },
+    { url: `${siteUrl}/about`, changeFrequency: "monthly", priority: 0.5 },
+    { url: `${siteUrl}/contact`, changeFrequency: "monthly", priority: 0.4 },
+    { url: `${siteUrl}/size-guide`, changeFrequency: "monthly", priority: 0.4 },
+    { url: `${siteUrl}/shipping-returns`, changeFrequency: "monthly", priority: 0.4 },
+    { url: `${siteUrl}/privacy`, changeFrequency: "yearly", priority: 0.3 },
   ];
 
   const [products, categories] = await Promise.all([
     prisma.product.findMany({
-      where: { isPublished: true },
-    }) as unknown as Promise<ProductRow[]>,
-    prisma.category.findMany({}) as unknown as Promise<CategoryRow[]>,
+      where: { isPublished: true, isArchived: false },
+      select: { slug: true, updatedAt: true },
+    }),
+    prisma.category.findMany({ select: { slug: true } }),
   ]);
 
-  const productRoutes: MetadataRoute.Sitemap = products.map((p) => ({
-    url: `${base}/products/${p.slug}`,
-    lastModified: new Date(p.updatedAt),
-    changeFrequency: "weekly",
-    priority: 0.7,
-  }));
-
-  const categoryRoutes: MetadataRoute.Sitemap = categories.map((c) => ({
-    url: `${base}/products/category/${c.slug}`,
-    changeFrequency: "weekly",
-    priority: 0.6,
-  }));
-
-  return [...staticRoutes, ...productRoutes, ...categoryRoutes];
+  return [
+    ...staticRoutes,
+    ...products.map((p) => ({
+      url: `${siteUrl}/products/${p.slug}`,
+      lastModified: p.updatedAt,
+      changeFrequency: "weekly" as const,
+      priority: 0.7,
+    })),
+    ...categories.map((c) => ({
+      url: `${siteUrl}/products/category/${c.slug}`,
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
+    })),
+  ];
 }

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireAdminOrSubAdmin } from "@/lib/require-admin";
 import { syncProductInStock } from "@/lib/inventory";
-import { generateOrderNumber } from "@/lib/payment";
+import { generateOrderNumber } from "@/lib/order-number";
 import {
   searchProductsForPos,
   searchCustomersForPos,
@@ -64,8 +64,10 @@ export async function createInPersonOrder(
   for (const item of input.items) {
     if (item.price < 0)
       return { error: `قیمت «${item.name}» نمی‌تواند منفی باشد.` };
-    if (item.quantity <= 0)
-      return { error: `تعداد «${item.name}» باید حداقل ۱ باشد.` };
+    if (!Number.isInteger(item.quantity) || item.quantity <= 0 || item.quantity > 500)
+      return { error: `تعداد «${item.name}» باید یک عدد صحیح بین ۱ تا ۵۰۰ باشد.` };
+    if (!Number.isInteger(item.price))
+      return { error: `قیمت «${item.name}» باید عدد صحیح (تومان) باشد.` };
   }
 
   const subtotal = input.items.reduce(

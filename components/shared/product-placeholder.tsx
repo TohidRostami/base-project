@@ -1,41 +1,30 @@
 import { cn } from "@/lib/utils";
-import { GarmentGlyph, type GarmentVariant } from "@/components/shared/garment-glyph";
+import { GarmentGlyph, garmentKind } from "@/components/shared/garment-glyph";
 
-const TONES: Record<GarmentVariant, string> = {
-  shirts: "bg-[var(--brand-surface)] text-[var(--brand-primary)]",
-  tshirts: "bg-[#e8e2d8] text-[var(--brand-primary)]",
-  pants: "bg-[#dcd9d1] text-[var(--brand-primary)]",
-  outerwear: "bg-[var(--brand-secondary)] text-[var(--brand-background)]",
-  shoes: "bg-[#e3ded3] text-[var(--brand-accent)]",
-  accessories: "bg-[#e6e0d6] text-[var(--brand-accent-2)]",
-};
-
+/**
+ * Stands in for a product photo until one is uploaded. Tinted with the
+ * product's first color so a grid of unphotographed products still reads
+ * as different garments rather than identical grey boxes.
+ */
 export function ProductPlaceholder({
-  variant,
+  categorySlug,
+  tint,
   className,
 }: {
-  variant: GarmentVariant;
+  categorySlug?: string | null;
+  tint?: string | null;
   className?: string;
 }) {
   return (
     <div
-      className={cn(
-        "relative flex aspect-[4/5] w-full items-center justify-center overflow-hidden",
-        TONES[variant],
-        className
-      )}
+      className={cn("flex size-full items-center justify-center bg-sand text-ink/35", className)}
+      style={
+        tint
+          ? { background: `color-mix(in srgb, ${tint} 22%, var(--brand-sand))` }
+          : undefined
+      }
     >
-      <div
-        className="absolute inset-0 opacity-[0.16]"
-        style={{
-          backgroundImage:
-            "repeating-linear-gradient(-45deg, currentColor 0, currentColor 1px, transparent 1px, transparent 7px)",
-        }}
-      />
-      <GarmentGlyph
-        variant={variant}
-        className="relative h-[46%] w-[46%] opacity-90"
-      />
+      <GarmentGlyph kind={garmentKind(categorySlug)} />
     </div>
   );
 }

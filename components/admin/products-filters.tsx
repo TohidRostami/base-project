@@ -29,11 +29,16 @@ export function ProductsFilters({ categories }: ProductsFiltersProps) {
   const { push } = useRouteTransition();
   const searchParams = useSearchParams();
 
-  const [search, setSearch] = React.useState(searchParams.get("search") ?? "");
+  const urlSearch = searchParams.get("search") ?? "";
+  const [search, setSearch] = React.useState(urlSearch);
 
-  React.useEffect(() => {
-    setSearch(searchParams.get("search") ?? "");
-  }, [searchParams]);
+  // Keep the box in step with the URL (back/forward, "clear filters") —
+  // adjusted during render, which is React's recommended alternative to an effect.
+  const [seenUrlSearch, setSeenUrlSearch] = React.useState(urlSearch);
+  if (urlSearch !== seenUrlSearch) {
+    setSeenUrlSearch(urlSearch);
+    setSearch(urlSearch);
+  }
 
   function updateFilter(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());

@@ -3,7 +3,7 @@ import { Wallet, ShoppingBag, Package, Users } from "lucide-react";
 
 import { StatCard } from "@/components/admin/stat-card";
 import { OutOfStockCard } from "@/components/admin/out-of-stock-card";
-import { getDashboardStats, getRecentOrders } from "@/lib/queries/admin";
+import { getDashboardStats } from "@/lib/queries/admin";
 import {
   getLowStockProducts,
   getOutOfStockProducts,
@@ -25,7 +25,7 @@ export default async function AdminDashboardPage() {
       <div>
         <h1 className="text-2xl font-bold">داشبورد</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          نمای کلی فروشگاه هاشور
+          نمای کلی فروشگاه نیکیا
         </p>
       </div>
 

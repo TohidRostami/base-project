@@ -16,10 +16,10 @@ export function EmptyState({
   actionHref?: string;
 }) {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-[20px] border border-dashed border-border bg-surface px-6 py-16 text-center">
-      <Icon className="h-10 w-10 text-muted" strokeWidth={1.4} />
-      <p className="text-[15px] font-bold">{title}</p>
-      {description && <p className="max-w-xs text-sm text-muted">{description}</p>}
+    <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-line bg-white px-6 py-16 text-center">
+      <Icon className="size-10 text-muted-foreground" strokeWidth={1.2} />
+      <p className="text-base font-medium">{title}</p>
+      {description && <p className="max-w-xs text-sm leading-7 text-muted-foreground">{description}</p>}
       {actionLabel && actionHref && (
         <Button asChild size="sm" className="mt-2">
           <Link href={actionHref}>{actionLabel}</Link>

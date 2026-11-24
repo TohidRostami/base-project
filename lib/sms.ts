@@ -12,7 +12,7 @@
  * Setup on sms.ir's side (one-time, in their panel):
  *   1. برنامه‌نویسان ← قالب‌های ماژول ارسال سریع ← افزودن قالب
  *   2. متن قالب باید یک متغیر با # دورش داشته باشد، مثلاً:
- *      «کد ورود شما به هاشور: #code# است.»
+ *      «کد ورود شما به نیکیا: #code# است.»
  *   3. منتظر تأیید کارشناسان سامانه پیامک بمانید (چند دقیقه تا چند ساعت).
  *   4. بعد از تأیید، شناسه‌ی قالب (عدد قرمزرنگ انتهای قالب) را بردارید.
  *   5. کلید API را از «برنامه‌نویسان ← کلید وب‌سرویس» بردارید.
@@ -63,6 +63,8 @@ async function sendViaSmsIr(
         templateId,
         parameters: [{ name: paramName, value: code }],
       }),
+      // A hung provider must not hold a serverless function open.
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!res.ok) {
@@ -92,8 +94,13 @@ export async function sendOtpSms(
   code: string,
 ): Promise<SendOtpResult> {
   if (!isConfigured()) {
-    // Dev-mode fallback only — never reached once real credentials are
-    // set, so the code is never written anywhere once this is live.
+    // Never print codes in production: anyone who can read the logs could
+    // sign in as any customer. A misconfigured production site fails loudly
+    // instead of "sending" nothing.
+    if (process.env.NODE_ENV === "production") {
+      console.error("[sms.ir] SMSIR_API_KEY / SMSIR_VERIFY_TEMPLATE_ID are not set — OTP not sent.");
+      return { success: false };
+    }
     console.log(`[SMS · DEV MODE] → ${phoneNumber}: کد ${code}`);
     return { success: true };
   }

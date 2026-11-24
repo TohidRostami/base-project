@@ -57,7 +57,7 @@ export default async function AdminUsersPage() {
           <TableBody>
             {users.map((u) => {
               const isPlaceholderEmail = u.email.endsWith(
-                "@hashor-phone.local",
+                "@phone.nikia.local",
               );
               return (
                 <TableRow key={u.id}>
